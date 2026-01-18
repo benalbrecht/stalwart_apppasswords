@@ -1,0 +1,10 @@
+<?php
+/**
+ * Stalwart App Passwords Plugin Configuration
+ *
+ * Copy this file to config.inc.php and adjust settings.
+ */
+
+// Stalwart Mail Server API URL
+// This should be accessible from the Roundcube server
+$config['stalwart_api_url'] = 'http://localhost:8080/api';
