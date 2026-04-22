@@ -11,6 +11,11 @@ $labels['apppasswords'] = 'App Passwords';
 // Form labels
 $labels['name'] = 'Name';
 $labels['name_placeholder'] = 'e.g., Thunderbird, iPhone Mail';
+$labels['usage'] = 'Usage';
+$labels['usage_all'] = 'All Access';
+$labels['usage_email'] = 'Email';
+$labels['usage_calendar'] = 'Calendar';
+$labels['usage_contacts'] = 'Contacts';
 
 // Buttons
 $labels['create_button'] = 'Create Password';
@@ -23,12 +28,13 @@ $labels['copy_password'] = 'Copy to Clipboard';
 // Section titles
 $labels['create_password'] = 'Create App Password';
 $labels['new_password_legend'] = 'New App Password';
-$labels['new_password_description'] = 'App passwords let you sign in to your email from apps that don\'t support two-factor authentication. Enter a descriptive name to help you remember where this password is used.';
+$labels['new_password_description'] = 'App passwords let you sign in from apps that don\'t support browser-based sign-in. Enter a name for the app and choose what it needs access to.';
 $labels['existing_passwords'] = 'Existing App Passwords';
 $labels['password_created_title'] = 'Password Created';
 
 // Table columns
 $labels['col_name'] = 'Name';
+$labels['col_usage'] = 'Usage';
 $labels['col_created'] = 'Created';
 
 // Messages

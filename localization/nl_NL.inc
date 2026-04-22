@@ -11,6 +11,11 @@ $labels['apppasswords'] = 'App-wachtwoorden';
 // Form labels
 $labels['name'] = 'Naam';
 $labels['name_placeholder'] = 'bv. Thunderbird, iPhone Mail';
+$labels['usage'] = 'Gebruik';
+$labels['usage_all'] = 'Volledige toegang';
+$labels['usage_email'] = 'E-mail';
+$labels['usage_calendar'] = 'Agenda';
+$labels['usage_contacts'] = 'Contacten';
 
 // Buttons
 $labels['create_button'] = 'Wachtwoord aanmaken';
@@ -23,12 +28,13 @@ $labels['copy_password'] = 'Kopiëren naar klembord';
 // Section titles
 $labels['create_password'] = 'App-wachtwoord aanmaken';
 $labels['new_password_legend'] = 'Nieuw App-wachtwoord';
-$labels['new_password_description'] = 'Met app-wachtwoorden kunt u inloggen op uw e-mail vanuit apps die geen tweefactorauthenticatie ondersteunen. Geef een beschrijvende naam op zodat u weet waarvoor dit wachtwoord wordt gebruikt.';
+$labels['new_password_description'] = 'Met app-wachtwoorden kunt u inloggen vanuit apps die niet via de browser kunnen inloggen. Geef een naam op voor de app en kies waartoe deze toegang nodig heeft.';
 $labels['existing_passwords'] = 'Bestaande App-wachtwoorden';
 $labels['password_created_title'] = 'Wachtwoord aangemaakt';
 
 // Table columns
 $labels['col_name'] = 'Naam';
+$labels['col_usage'] = 'Gebruik';
 $labels['col_created'] = 'Aangemaakt';
 
 // Messages

@@ -36,32 +36,40 @@ if (window.rcmail) {
 
             var sel = rcmail.apppasswords_list.get_single_selection();
             if (sel && confirm(rcmail.gettext('stalwart_apppasswords.confirm_delete'))) {
-                var idx = sel.replace('rcmrow', '');
-                rcmail.http_post('plugin.stalwart_apppasswords-delete', {_idx: idx}, rcmail.set_busy(true, 'loading'));
+                var id = sel.replace('rcmrow', '');
+                rcmail.http_post('plugin.stalwart_apppasswords-delete', {_id: id}, rcmail.set_busy(true, 'loading'));
             }
         }, false);
 
         // ==================== Fallback Mode ====================
 
         // Delete command (fallback template)
-        rcmail.register_command('plugin.stalwart_apppasswords-delete-fallback', function(idx) {
+        rcmail.register_command('plugin.stalwart_apppasswords-delete-fallback', function(id) {
             if (confirm(rcmail.gettext('stalwart_apppasswords.confirm_delete'))) {
-                rcmail.http_post('plugin.stalwart_apppasswords-delete', {_idx: idx}, rcmail.set_busy(true, 'loading'));
+                rcmail.http_post('plugin.stalwart_apppasswords-delete', {_id: id}, rcmail.set_busy(true, 'loading'));
             }
-        }, true); // <-- Changed to 'true' to enable the command
+        }, true);
 
         // ==================== Response Handlers ====================
 
         // Handle deletion response
         rcmail.addEventListener('plugin.apppassword_deleted', function(response) {
+            var row_id = 'rcmrow' + response.id;
+
             // Custom template mode (Elastic)
             if (rcmail.apppasswords_list) {
-                rcmail.apppasswords_list.remove_row('rcmrow' + response.idx);
+                rcmail.apppasswords_list.remove_row(row_id);
                 rcmail.enable_command('plugin.stalwart_apppasswords-delete', false);
-            } else {
-                // Fallback mode - reload page to refresh the list
-                window.location.reload();
             }
+
+            var row = document.getElementById(row_id);
+            if (row && row.parentNode) {
+                row.parentNode.removeChild(row);
+                return;
+            }
+
+            // Fallback if row wasn't found in the current DOM/list state
+            window.location.reload();
         });
     });
 }

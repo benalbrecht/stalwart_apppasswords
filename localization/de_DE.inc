@@ -11,6 +11,11 @@ $labels['apppasswords'] = 'App-Passwörter';
 // Form labels
 $labels['name'] = 'Name';
 $labels['name_placeholder'] = 'z.B. Thunderbird, iPhone Mail';
+$labels['usage'] = 'Verwendung';
+$labels['usage_all'] = 'Vollzugriff';
+$labels['usage_email'] = 'E-Mail';
+$labels['usage_calendar'] = 'Kalender';
+$labels['usage_contacts'] = 'Kontakte';
 
 // Buttons
 $labels['create_button'] = 'Passwort erstellen';
@@ -23,12 +28,13 @@ $labels['copy_password'] = 'In die Zwischenablage kopieren';
 // Section titles
 $labels['create_password'] = 'App-Passwort erstellen';
 $labels['new_password_legend'] = 'Neues App-Passwort';
-$labels['new_password_description'] = 'Mit App-Passwörtern können Sie sich von Apps aus anmelden, die keine Zwei-Faktor-Authentifizierung unterstützen. Geben Sie einen beschreibenden Namen ein, um sich daran zu erinnern, wo dieses Passwort verwendet wird.';
+$labels['new_password_description'] = 'Mit App-Passwörtern können Sie sich über Apps anmelden, die keine Anmeldung über den Browser unterstützen. Geben Sie einen Namen für die App ein und wählen Sie, welchen Zugriff sie benötigt.';
 $labels['existing_passwords'] = 'Vorhandene App-Passwörter';
 $labels['password_created_title'] = 'Passwort erstellt';
 
 // Table columns
 $labels['col_name'] = 'Name';
+$labels['col_usage'] = 'Verwendung';
 $labels['col_created'] = 'Erstellt';
 
 // Messages

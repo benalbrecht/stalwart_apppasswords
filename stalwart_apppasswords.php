@@ -111,11 +111,11 @@ class stalwart_apppasswords extends rcube_plugin
         $name = preg_replace('/[^\w\s\-_.@]/', '', $name);
         $name = mb_substr($name, 0, 64);
 
-        $password = $this->generate_password();
-        $result = $this->api_create_app_password($name, $password);
+        $usage = rcube_utils::get_input_value('_usage', rcube_utils::INPUT_POST) ?: 'all';
+        $result = $this->jmap_create_app_password($name, $usage);
 
         if ($result['success']) {
-            $_SESSION['stalwart_apppassword'] = $password;
+            $_SESSION['stalwart_apppassword'] = $result['secret'];
             $_SESSION['stalwart_apppassword_name'] = $name;
             $this->rcmail->output->redirect(array('_action' => 'plugin.stalwart_apppasswords-created'));
         } else {
@@ -145,16 +145,15 @@ class stalwart_apppasswords extends rcube_plugin
      */
     function action_delete()
     {
-        $idx = intval(rcube_utils::get_input_value('_idx', rcube_utils::INPUT_POST));
+        $id = rcube_utils::get_input_value('_id', rcube_utils::INPUT_POST);
 
-        $passwords = $this->api_get_app_passwords();
-        if (isset($passwords[$idx])) {
-            $result = $this->api_delete_app_password($passwords[$idx]['encoded_name']);
+        if (!empty($id)) {
+            $result = $this->jmap_delete_app_password($id);
             if ($result['success']) {
                 $this->rcmail->output->show_message($this->gettext('password_deleted'), 'confirmation');
-                $this->rcmail->output->command('plugin.apppassword_deleted', array('idx' => $idx));
+                $this->rcmail->output->command('plugin.apppassword_deleted', array('id' => $id));
             } else {
-                $this->rcmail->output->show_message($this->gettext('error_deleting'), 'error');
+                $this->rcmail->output->show_message($result['error'] ?? $this->gettext('error_deleting'), 'error');
             }
         } else {
             $this->rcmail->output->show_message($this->gettext('error_deleting'), 'error');
@@ -171,7 +170,7 @@ class stalwart_apppasswords extends rcube_plugin
     function render_passwords_list($attrib)
     {
         $attrib += array('id' => 'apppasswords-table');
-        $passwords = $this->api_get_app_passwords();
+        $passwords = $this->jmap_get_app_passwords();
 
         $table = new html_table(array(
             'id' => $attrib['id'],
@@ -180,9 +179,10 @@ class stalwart_apppasswords extends rcube_plugin
         ));
 
         if (is_array($passwords) && !empty($passwords)) {
-            foreach ($passwords as $idx => $pw) {
-                $table->add_row(array('id' => 'rcmrow' . $idx));
-                $table->add(array('class' => 'name'), rcube::Q($pw['name']));
+            foreach ($passwords as $pw) {
+                $table->add_row(array('id' => 'rcmrow' . $pw['id']));
+                $table->add(array('class' => 'name'), rcube::Q($pw['description']));
+                $table->add(array('class' => 'usage'), rcube::Q($this->get_usage_label($pw)));
             }
         }
 
@@ -211,6 +211,9 @@ class stalwart_apppasswords extends rcube_plugin
 
         $table->add('title', html::label('apppassword-name', rcube::Q($this->gettext('name'))));
         $table->add(null, $input->show());
+
+        $table->add('title', html::label('apppassword-usage', rcube::Q($this->gettext('usage'))));
+        $table->add(null, $this->render_usage_select()->show('email'));
 
         $out = $this->rcmail->output->form_tag(array(
             'id' => $attrib['id'],
@@ -283,7 +286,10 @@ class stalwart_apppasswords extends rcube_plugin
 
         $table->add('title', html::label('apppassword-name-fallback', rcube::Q($this->gettext('name'))));
         $table->add(null, $input->show());
-        
+
+        $table->add('title', html::label('apppassword-usage-fallback', rcube::Q($this->gettext('usage'))));
+        $table->add(null, $this->render_usage_select('apppassword-usage-fallback')->show('email'));
+
         // Button row
         $table->add(null, '&nbsp;');
         $table->add(null, html::tag('input', array(
@@ -306,43 +312,46 @@ class stalwart_apppasswords extends rcube_plugin
 
         $out .= html::tag('h2', 'boxtitle', rcube::Q($this->gettext('existing_passwords')));
 
-        $passwords = $this->api_get_app_passwords();
+        $passwords = $this->jmap_get_app_passwords();
 
         $table = new html_table(array(
             'class' => 'records-table listing',
             'id' => 'apppasswords-table-fallback',
             'cellspacing' => '0',
-            'cols' => 3,
+            'cols' => 4,
         ));
 
         $table->add_header('name', rcube::Q($this->gettext('col_name')));
+        $table->add_header('usage', rcube::Q($this->gettext('col_usage')));
         $table->add_header('created', rcube::Q($this->gettext('col_created')));
         $table->add_header('action', '&nbsp;');
 
         if (empty($passwords)) {
-            $table->add(array('colspan' => 3, 'class' => 'hint'), rcube::Q($this->gettext('no_passwords')));
+            $table->add(array('colspan' => 4, 'class' => 'hint'), rcube::Q($this->gettext('no_passwords')));
         } else {
-            foreach ($passwords as $idx => $pw) {
-                // Changed from <a> to <input type="button"> to guarantee button appearance
+            foreach ($passwords as $pw) {
+                $table->add_row(array('id' => 'rcmrow' . $pw['id']));
+
                 $delete_btn = html::tag('input', array(
                     'type' => 'button',
-                    'class' => 'button', // Standard button style
-                    'onclick' => 'return rcmail.command("plugin.stalwart_apppasswords-delete-fallback", ' . $idx . ', this)',
+                    'class' => 'button',
+                    'onclick' => 'return rcmail.command("plugin.stalwart_apppasswords-delete-fallback", "' . rcube::JQ($pw['id']) . '", this)',
                     'value' => $this->gettext('delete'),
                     'title' => $this->gettext('delete')
                 ));
 
                 $created = '';
-                if (!empty($pw['created'])) {
+                if (!empty($pw['createdAt'])) {
                     try {
-                        $date = new DateTime($pw['created']);
+                        $date = new DateTime($pw['createdAt']);
                         $created = $date->format('Y-m-d H:i');
                     } catch (Exception $e) {
-                        $created = $pw['created'];
+                        $created = $pw['createdAt'];
                     }
                 }
 
-                $table->add('name', rcube::Q($pw['name']));
+                $table->add('name', rcube::Q($pw['description']));
+                $table->add('usage', rcube::Q($this->get_usage_label($pw)));
                 $table->add('created', $created);
                 $table->add('action', $delete_btn);
             }
@@ -377,6 +386,9 @@ class stalwart_apppasswords extends rcube_plugin
 
         $table->add('title', html::label('apppassword-name', rcube::Q($this->gettext('name'))));
         $table->add(null, $input->show());
+
+        $table->add('title', html::label('apppassword-usage', rcube::Q($this->gettext('usage'))));
+        $table->add(null, $this->render_usage_select()->show('email'));
 
         $form = $this->rcmail->output->form_tag(array(
             'id' => 'apppassword-form',
@@ -460,7 +472,236 @@ class stalwart_apppasswords extends rcube_plugin
         return html::div('boxcontent formcontent', $out);
     }
 
-    // ==================== API METHODS ====================
+    /**
+     * Map a password's permissions object back to a usage label
+     */
+    private function get_usage_label($pw)
+    {
+        if (!is_array($pw)) {
+            return $this->gettext('usage_all');
+        }
+
+        $perms = $pw['permissions'] ?? null;
+        if (!$perms || ($perms['@type'] ?? '') === 'Inherit') {
+            return $this->gettext('usage_all');
+        }
+
+        $list = $perms['permissions'] ?? array();
+        if (array_keys($list) !== range(0, count($list) - 1)) {
+            $list = array_keys(array_filter($list));
+        }
+        $list = array_map('strtolower', $list);
+
+        // Check email first: the email preset includes contacts permissions
+        // (for autocomplete), so we must distinguish it before the contacts check.
+        $has_email = in_array('imapauthenticate', $list);
+        $has_calendar = in_array('jmapcalendarget', $list);
+        $has_contacts = in_array('jmapcontactcardget', $list);
+
+        if ($has_email) {
+            return $this->gettext('usage_email');
+        } elseif ($has_calendar) {
+            return $this->gettext('usage_calendar');
+        } elseif ($has_contacts) {
+            return $this->gettext('usage_contacts');
+        }
+
+        return $this->gettext('usage_all');
+    }
+
+    // ==================== PERMISSION PRESETS ====================
+
+    /**
+     * Build the usage type select element
+     */
+    private function render_usage_select($id = 'apppassword-usage')
+    {
+        $select = new html_select(array(
+            'name' => '_usage',
+            'id' => $id,
+            'class' => 'form-control',
+        ));
+
+        $select->add($this->gettext('usage_all'), 'all');
+        $select->add($this->gettext('usage_email'), 'email');
+        $select->add($this->gettext('usage_calendar'), 'calendar');
+        $select->add($this->gettext('usage_contacts'), 'contacts');
+
+        return $select;
+    }
+
+    /**
+     * Common permissions shared by all restricted presets
+     */
+    private static function common_permissions()
+    {
+        return array(
+            'Authenticate',
+            'AuthenticateWithAlias',
+            'JmapPushSubscriptionGet',
+            'JmapPushSubscriptionCreate',
+            'JmapPushSubscriptionUpdate',
+            'JmapPushSubscriptionDestroy',
+            'JmapBlobGet',
+            'JmapBlobCopy',
+            'JmapBlobLookup',
+            'JmapBlobUpload',
+            'JmapQuotaGet',
+            'JmapQuotaChanges',
+            'JmapQuotaQuery',
+            'JmapQuotaQueryChanges',
+            'JmapPrincipalGet',
+            'JmapPrincipalQuery',
+            'JmapPrincipalChanges',
+            'JmapPrincipalQueryChanges',
+            'JmapPrincipalGetAvailability',
+            'JmapShareNotificationGet',
+            'JmapShareNotificationChanges',
+            'JmapShareNotificationQuery',
+            'JmapShareNotificationQueryChanges',
+            'JmapShareNotificationCreate',
+            'JmapShareNotificationUpdate',
+            'JmapShareNotificationDestroy',
+            'DavSyncCollection',
+            'DavExpandProperty',
+            'DavPrincipalList',
+            'DavPrincipalMatch',
+            'DavPrincipalSearch',
+            'DavPrincipalSearchPropSet',
+            'DavPrincipalAcl',
+            'JmapCoreEcho',
+        );
+    }
+
+    private static function email_permissions()
+    {
+        return array(
+            'EmailSend',
+            'EmailReceive',
+            // IMAP
+            'ImapAuthenticate', 'ImapAclGet', 'ImapAclSet', 'ImapMyRights', 'ImapListRights',
+            'ImapAppend', 'ImapCapability', 'ImapId', 'ImapCopy', 'ImapMove',
+            'ImapCreate', 'ImapDelete', 'ImapEnable', 'ImapExpunge', 'ImapFetch',
+            'ImapIdle', 'ImapList', 'ImapLsub', 'ImapNamespace', 'ImapRename',
+            'ImapSearch', 'ImapSort', 'ImapSelect', 'ImapExamine', 'ImapStatus',
+            'ImapStore', 'ImapSubscribe', 'ImapThread',
+            // POP3
+            'Pop3Authenticate', 'Pop3List', 'Pop3Uidl', 'Pop3Stat', 'Pop3Retr', 'Pop3Dele',
+            // JMAP mail
+            'JmapMailboxGet', 'JmapMailboxChanges', 'JmapMailboxQuery', 'JmapMailboxQueryChanges',
+            'JmapMailboxCreate', 'JmapMailboxUpdate', 'JmapMailboxDestroy',
+            'JmapThreadGet', 'JmapThreadChanges',
+            'JmapEmailGet', 'JmapEmailChanges', 'JmapEmailQuery', 'JmapEmailQueryChanges',
+            'JmapEmailCreate', 'JmapEmailUpdate', 'JmapEmailDestroy',
+            'JmapEmailCopy', 'JmapEmailImport', 'JmapEmailParse',
+            'JmapSearchSnippetGet',
+            'JmapIdentityGet', 'JmapIdentityChanges', 'JmapIdentityCreate',
+            'JmapIdentityUpdate', 'JmapIdentityDestroy',
+            'JmapEmailSubmissionGet', 'JmapEmailSubmissionChanges',
+            'JmapEmailSubmissionQuery', 'JmapEmailSubmissionQueryChanges',
+            'JmapEmailSubmissionCreate', 'JmapEmailSubmissionUpdate', 'JmapEmailSubmissionDestroy',
+            'JmapVacationResponseGet', 'JmapVacationResponseCreate',
+            'JmapVacationResponseUpdate', 'JmapVacationResponseDestroy',
+            // Sieve
+            'JmapSieveScriptGet', 'JmapSieveScriptQuery', 'JmapSieveScriptValidate',
+            'JmapSieveScriptCreate', 'JmapSieveScriptUpdate', 'JmapSieveScriptDestroy',
+            'SieveAuthenticate', 'SieveListScripts', 'SieveSetActive',
+            'SieveGetScript', 'SievePutScript', 'SieveDeleteScript',
+            'SieveRenameScript', 'SieveCheckScript', 'SieveHaveSpace',
+        );
+    }
+
+    private static function contacts_permissions()
+    {
+        return array(
+            'JmapAddressBookGet', 'JmapAddressBookChanges',
+            'JmapAddressBookCreate', 'JmapAddressBookUpdate', 'JmapAddressBookDestroy',
+            'JmapContactCardGet', 'JmapContactCardChanges',
+            'JmapContactCardQuery', 'JmapContactCardQueryChanges',
+            'JmapContactCardCreate', 'JmapContactCardUpdate', 'JmapContactCardDestroy',
+            'JmapContactCardCopy', 'JmapContactCardParse',
+            'DavCardPropFind', 'DavCardPropPatch', 'DavCardGet', 'DavCardMkCol',
+            'DavCardDelete', 'DavCardPut', 'DavCardCopy', 'DavCardMove',
+            'DavCardLock', 'DavCardAcl', 'DavCardQuery', 'DavCardMultiGet',
+        );
+    }
+
+    private static function calendar_permissions()
+    {
+        return array(
+            'CalendarAlarmsSend',
+            'CalendarSchedulingSend',
+            'CalendarSchedulingReceive',
+            'JmapCalendarGet', 'JmapCalendarChanges',
+            'JmapCalendarCreate', 'JmapCalendarUpdate', 'JmapCalendarDestroy',
+            'JmapCalendarEventGet', 'JmapCalendarEventChanges',
+            'JmapCalendarEventQuery', 'JmapCalendarEventQueryChanges',
+            'JmapCalendarEventCreate', 'JmapCalendarEventUpdate', 'JmapCalendarEventDestroy',
+            'JmapCalendarEventCopy', 'JmapCalendarEventParse',
+            'JmapCalendarEventNotificationGet', 'JmapCalendarEventNotificationChanges',
+            'JmapCalendarEventNotificationQuery', 'JmapCalendarEventNotificationQueryChanges',
+            'JmapCalendarEventNotificationCreate', 'JmapCalendarEventNotificationUpdate',
+            'JmapCalendarEventNotificationDestroy',
+            'JmapParticipantIdentityGet', 'JmapParticipantIdentityChanges',
+            'JmapParticipantIdentityCreate', 'JmapParticipantIdentityUpdate',
+            'JmapParticipantIdentityDestroy',
+            'DavCalPropFind', 'DavCalPropPatch', 'DavCalGet', 'DavCalMkCol',
+            'DavCalDelete', 'DavCalPut', 'DavCalCopy', 'DavCalMove',
+            'DavCalLock', 'DavCalAcl', 'DavCalQuery', 'DavCalMultiGet',
+            'DavCalFreeBusyQuery',
+        );
+    }
+
+    /**
+     * Get the permissions object for a given usage preset
+     */
+    private function get_permissions_for_usage($usage)
+    {
+        $normalize = function ($permissions) {
+            $names = array_values(array_unique(array_map(function ($permission) {
+                return is_string($permission) ? lcfirst($permission) : $permission;
+            }, $permissions)));
+
+            $map = array();
+            foreach ($names as $name) {
+                $map[$name] = true;
+            }
+
+            return $map;
+        };
+
+        switch ($usage) {
+            case 'email':
+                return array(
+                    '@type' => 'Replace',
+                    'permissions' => $normalize(array_merge(
+                        self::common_permissions(),
+                        self::email_permissions(),
+                        self::contacts_permissions()
+                    )),
+                );
+            case 'calendar':
+                return array(
+                    '@type' => 'Replace',
+                    'permissions' => $normalize(array_merge(
+                        self::common_permissions(),
+                        self::calendar_permissions()
+                    )),
+                );
+            case 'contacts':
+                return array(
+                    '@type' => 'Replace',
+                    'permissions' => $normalize(array_merge(
+                        self::common_permissions(),
+                        self::contacts_permissions()
+                    )),
+                );
+            default:
+                return array('@type' => 'Inherit');
+        }
+    }
+
+    // ==================== JMAP API METHODS ====================
 
     /**
      * Get OAuth token from session
@@ -474,11 +715,58 @@ class stalwart_apppasswords extends rcube_plugin
     }
 
     /**
-     * Make API request to Stalwart
+     * Get the JMAP account ID for the authenticated user.
+     * Fetches from /jmap/session and caches in the PHP session.
      */
-    private function api_request($endpoint, $method = 'GET', $data = null)
+    private function get_account_id()
     {
-        $api_url = $this->rcmail->config->get('stalwart_api_url', 'http://localhost:8080/api');
+        if (!empty($_SESSION['stalwart_account_id'])) {
+            return $_SESSION['stalwart_account_id'];
+        }
+
+        $base_url = $this->rcmail->config->get('stalwart_url', 'http://localhost:8080');
+        $token = $this->get_oauth_token();
+
+        if (!$token) {
+            return null;
+        }
+
+        $url = rtrim($base_url, '/') . '/jmap/session';
+
+        $ch = curl_init($url);
+        curl_setopt_array($ch, array(
+            CURLOPT_RETURNTRANSFER => true,
+            CURLOPT_TIMEOUT => 30,
+            CURLOPT_HTTPHEADER => array(
+                'Authorization: Bearer ' . $token,
+                'Accept: application/json',
+            ),
+        ));
+
+        $response = curl_exec($ch);
+        $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($http_code !== 200) {
+            return null;
+        }
+
+        $session = json_decode($response, true);
+        $account_id = $session['primaryAccounts']['urn:stalwart:jmap'] ?? null;
+
+        if ($account_id) {
+            $_SESSION['stalwart_account_id'] = $account_id;
+        }
+
+        return $account_id;
+    }
+
+    /**
+     * Make a JMAP request to Stalwart
+     */
+    private function jmap_request($method, $args)
+    {
+        $base_url = $this->rcmail->config->get('stalwart_url', 'http://localhost:8080');
         $token = $this->get_oauth_token();
 
         if (!$token) {
@@ -489,25 +777,37 @@ class stalwart_apppasswords extends rcube_plugin
             return array('success' => false, 'error' => $this->gettext('error_no_token'));
         }
 
-        $url = rtrim($api_url, '/') . $endpoint;
+        $account_id = $this->get_account_id();
+        if (!$account_id) {
+            return array('success' => false, 'error' => $this->gettext('error_api'));
+        }
+
+        $args['accountId'] = $account_id;
+
+        $payload = array(
+            'using' => array(
+                'urn:ietf:params:jmap:core',
+                'urn:stalwart:jmap',
+            ),
+            'methodCalls' => array(
+                array($method, $args, '0'),
+            ),
+        );
+
+        $url = rtrim($base_url, '/') . '/jmap';
 
         $ch = curl_init($url);
         curl_setopt_array($ch, array(
             CURLOPT_RETURNTRANSFER => true,
             CURLOPT_TIMEOUT => 30,
+            CURLOPT_POST => true,
+            CURLOPT_POSTFIELDS => json_encode($payload, JSON_UNESCAPED_SLASHES),
             CURLOPT_HTTPHEADER => array(
                 'Authorization: Bearer ' . $token,
                 'Content-Type: application/json',
                 'Accept: application/json',
             ),
         ));
-
-        if ($method === 'POST') {
-            curl_setopt($ch, CURLOPT_POST, true);
-            if ($data !== null) {
-                curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($data));
-            }
-        }
 
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
@@ -517,113 +817,93 @@ class stalwart_apppasswords extends rcube_plugin
         if ($curl_error) {
             rcube::raise_error(array(
                 'code' => 500,
-                'message' => 'Stalwart API curl error: ' . $curl_error
+                'message' => 'Stalwart JMAP curl error: ' . $curl_error
             ), true, false);
             return array('success' => false, 'error' => $this->gettext('error_connection'));
         }
 
         $decoded = json_decode($response, true);
 
-        if ($http_code >= 200 && $http_code < 300) {
-            return array('success' => true, 'data' => $decoded['data'] ?? $decoded);
+        if ($http_code >= 200 && $http_code < 300 && !empty($decoded['methodResponses'])) {
+            $method_response = $decoded['methodResponses'][0];
+            if ($method_response[0] === 'error') {
+                $error = $method_response[1]['description'] ?? $method_response[1]['type'] ?? $this->gettext('error_api');
+                return array('success' => false, 'error' => $error);
+            }
+            return array(
+                'success' => true,
+                'method' => $method_response[0],
+                'data' => $method_response[1],
+            );
         }
 
-        return array(
-            'success' => false,
-            'error' => $decoded['detail'] ?? $decoded['error'] ?? $this->gettext('error_api'),
-            'http_code' => $http_code,
-        );
+        $error = $decoded['detail'] ?? $decoded['error'] ?? $this->gettext('error_api');
+        return array('success' => false, 'error' => $error, 'http_code' => $http_code);
     }
 
     /**
-     * Get list of app passwords
+     * Get list of app passwords via JMAP x:AppPassword/get
      */
-    private function api_get_app_passwords()
+    private function jmap_get_app_passwords()
     {
-        $result = $this->api_request('/account/auth');
+        $result = $this->jmap_request('x:AppPassword/get', array());
 
         if (!$result['success']) {
             return array();
         }
 
-        $passwords = array();
-        $app_passwords = $result['data']['appPasswords'] ?? array();
-
-        foreach ($app_passwords as $encoded_name) {
-            $decoded = base64_decode($encoded_name, true);
-            $name = $encoded_name;
-            $created = null;
-
-            if ($decoded !== false && strpos($decoded, '$') !== false) {
-                $parts = explode('$', $decoded, 2);
-                $name = $parts[0];
-                $created = $parts[1] ?? null;
-            }
-
-            $passwords[] = array(
-                'name' => $name,
-                'encoded_name' => $encoded_name,
-                'created' => $created,
-            );
-        }
-
-        return $passwords;
+        return $result['data']['list'] ?? array();
     }
 
     /**
-     * Create a new app password
+     * Create a new app password via JMAP x:AppPassword/set.
+     * The server generates the secret and returns it once.
      */
-    private function api_create_app_password($name, $password)
+    private function jmap_create_app_password($description, $usage = 'all')
     {
-        // Generate salt for SHA-512 crypt
-        $salt_chars = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
-        $salt = '';
-        for ($i = 0; $i < 16; $i++) {
-            $salt .= $salt_chars[random_int(0, 63)];
-        }
-
-        // Hash password
-        $hashed = crypt($password, '$6$' . $salt . '$');
-
-        // Encode name with timestamp
-        $name_with_timestamp = $name . '$' . date('c');
-        $encoded_name = base64_encode($name_with_timestamp);
-
-        $data = array(array(
-            'type' => 'addAppPassword',
-            'name' => $encoded_name,
-            'password' => $hashed,
+        $result = $this->jmap_request('x:AppPassword/set', array(
+            'create' => array(
+                'new1' => array(
+                    'description' => $description,
+                    'permissions' => $this->get_permissions_for_usage($usage),
+                ),
+            ),
         ));
 
-        return $this->api_request('/account/auth', 'POST', $data);
-    }
-
-    /**
-     * Delete an app password
-     */
-    private function api_delete_app_password($encoded_name)
-    {
-        $data = array(array(
-            'type' => 'removeAppPassword',
-            'name' => $encoded_name,
-        ));
-
-        return $this->api_request('/account/auth', 'POST', $data);
-    }
-
-    /**
-     * Generate a random password
-     */
-    private function generate_password($length = 16)
-    {
-        // Exclude confusing characters (0, O, l, 1, I)
-        $chars = 'abcdefghjkmnpqrstuvwxyz23456789';
-        $password = '';
-
-        for ($i = 0; $i < $length; $i++) {
-            $password .= $chars[random_int(0, strlen($chars) - 1)];
+        if (!$result['success']) {
+            return $result;
         }
 
-        return $password;
+        $created = $result['data']['created']['new1'] ?? null;
+        if ($created && !empty($created['secret'])) {
+            return array('success' => true, 'secret' => $created['secret']);
+        }
+
+        $not_created = $result['data']['notCreated']['new1'] ?? null;
+        $error = $not_created['description'] ?? $this->gettext('error_creating');
+        return array('success' => false, 'error' => $error);
+    }
+
+    /**
+     * Delete an app password via JMAP x:AppPassword/set
+     */
+    private function jmap_delete_app_password($credential_id)
+    {
+        $result = $this->jmap_request('x:AppPassword/set', array(
+            'destroy' => array($credential_id),
+        ));
+
+        if (!$result['success']) {
+            return $result;
+        }
+
+        $destroyed = $result['data']['destroyed'] ?? array();
+        if (in_array($credential_id, $destroyed)) {
+            return array('success' => true);
+        }
+
+        $not_destroyed = $result['data']['notDestroyed'][$credential_id] ?? null;
+        $error = $not_destroyed['description'] ?? $this->gettext('error_deleting');
+        return array('success' => false, 'error' => $error);
     }
 }

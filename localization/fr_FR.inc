@@ -11,6 +11,11 @@ $labels['apppasswords'] = 'Mots de passe d\'application';
 // Form labels
 $labels['name'] = 'Nom';
 $labels['name_placeholder'] = 'ex: Thunderbird, iPhone Mail';
+$labels['usage'] = 'Utilisation';
+$labels['usage_all'] = 'Accès complet';
+$labels['usage_email'] = 'E-mail';
+$labels['usage_calendar'] = 'Calendrier';
+$labels['usage_contacts'] = 'Contacts';
 
 // Buttons
 $labels['create_button'] = 'Créer un mot de passe';
@@ -23,12 +28,13 @@ $labels['copy_password'] = 'Copier dans le presse-papier';
 // Section titles
 $labels['create_password'] = 'Créer un mot de passe d\'application';
 $labels['new_password_legend'] = 'Nouveau mot de passe d\'application';
-$labels['new_password_description'] = 'Les mots de passe d\'application vous permettent de vous connecter à votre messagerie depuis des applications ne prenant pas en charge l\'authentification à deux facteurs. Saisissez un nom descriptif pour vous souvenir de l\'utilisation de ce mot de passe.';
+$labels['new_password_description'] = 'Les mots de passe d\'application vous permettent de vous connecter depuis des applications ne prenant pas en charge la connexion via le navigateur. Saisissez un nom pour l\'application et choisissez à quoi elle doit avoir accès.';
 $labels['existing_passwords'] = 'Mots de passe existants';
 $labels['password_created_title'] = 'Mot de passe créé';
 
 // Table columns
 $labels['col_name'] = 'Nom';
+$labels['col_usage'] = 'Utilisation';
 $labels['col_created'] = 'Créé le';
 
 // Messages

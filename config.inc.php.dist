@@ -5,6 +5,6 @@
  * Copy this file to config.inc.php and adjust settings.
  */
 
-// Stalwart Mail Server API URL
+// Stalwart Mail Server base URL (without trailing /jmap)
 // This should be accessible from the Roundcube server
-$config['stalwart_api_url'] = 'http://localhost:8080/api';
+$config['stalwart_url'] = 'http://localhost:8080';

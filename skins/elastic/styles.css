@@ -2,3 +2,13 @@
 #settings-menu li.apppasswords a:before {
     content: "\f009"; /* Grid/App Drawer icon */
 }
+
+/* Usage column in password lists */
+#apppasswords-table .usage,
+#apppasswords-table-fallback .usage {
+    color: #888;
+    white-space: nowrap;
+    width: 7rem;
+    min-width: 6rem;
+    padding-right: 1em;
+}
