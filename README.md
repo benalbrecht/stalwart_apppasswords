@@ -1,4 +1,4 @@
-# Stalwart App Passwords for Roundcube
+# Stalwart 0.16+ App Passwords for Roundcube
 
 Manage [Stalwart Mail Server](https://stalw.art/) application passwords directly from Roundcube webmail.
 
@@ -25,7 +25,7 @@ This plugin adds an "App Passwords" tab to Roundcube's settings, letting users c
 ## Requirements
 
 - Roundcube 1.6 or later
-- Stalwart Mail Server with Management API enabled
+- Stalwart Mail Server 0.16.0 or later
 - OAuth/OIDC authentication configured (plugin uses the OAuth token to authenticate with Stalwart)
 - PHP 7.4 or later with curl extension
 
@@ -43,9 +43,9 @@ This plugin adds an "App Passwords" tab to Roundcube's settings, letting users c
    cp config.inc.php.dist config.inc.php
    ```
 
-3. Edit `config.inc.php` with your Stalwart API URL:
+3. Edit `config.inc.php` with your Stalwart URL:
    ```php
-   $config['stalwart_api_url'] = 'http://stalwart:8080/api';
+   $config['stalwart_url'] = 'http://stalwart:8080';
    ```
 
 4. Enable the plugin in your Roundcube configuration (`config/config.inc.php`):
@@ -58,7 +58,9 @@ This plugin adds an "App Passwords" tab to Roundcube's settings, letting users c
 
 ## How It Works
 
-This plugin uses Stalwart's `/api/account/auth` endpoint to manage app passwords. It authenticates using the OAuth access token from the user's Roundcube session, which means:
+This plugin uses Stalwart JMAP to manage app passwords. It authenticates using the OAuth access token from the user's Roundcube session, fetches account context from `/jmap/session`, and performs app password operations via `x:AppPassword/get` and `x:AppPassword/set` on `/jmap`.
+
+This means:
 
 1. Users must be logged in via OAuth/OIDC (e.g., Authentik, Keycloak)
 2. Stalwart must be configured to validate tokens from the same identity provider
@@ -66,15 +68,20 @@ This plugin uses Stalwart's `/api/account/auth` endpoint to manage app passwords
 
 ## Stalwart Configuration
 
-Ensure Stalwart is configured to accept OAuth tokens from your identity provider:
+Ensure Stalwart is [configured](https://stalw.art/docs/auth/backend/oidc#configuration) to accept OAuth tokens from your identity provider:
 
-```toml
-[directory."authentik"]
-type = "oidc"
-endpoint.url = "https://your-idp.example.com/application/o/userinfo/"
-endpoint.method = "userinfo"
-fields.email = "email"
-fields.username = "preferred_username"
+```json
+{
+  "@type": "Oidc",
+  "description": "External IdP",
+  "issuerUrl": "https://accounts.example.org/realms/myrealm",
+  "requireAudience": "stalwart",
+  "requireScopes": ["openid", "email"],
+  "claimUsername": "preferred_username",
+  "usernameDomain": "example.org",
+  "claimName": "name",
+  "claimGroups": "groups"
+}
 ```
 
 ## Troubleshooting
@@ -86,7 +93,7 @@ fields.username = "preferred_username"
 
 ### "Could not connect to mail server"
 
-- Verify `stalwart_api_url` is correct and accessible from Roundcube server
+- Verify `stalwart_url` is correct and accessible from Roundcube server
 - Check firewall rules between Roundcube and Stalwart
 
 ### Plugin doesn't appear in Settings
