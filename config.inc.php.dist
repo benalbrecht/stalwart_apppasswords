@@ -8,3 +8,4 @@
 // Stalwart Mail Server base URL (without trailing /jmap)
 // This should be accessible from the Roundcube server
 $config['stalwart_url'] = 'http://localhost:8080';
+$config['stalwart_apppasswords_debug_http'] = false;

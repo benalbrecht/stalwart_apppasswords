@@ -704,6 +704,54 @@ class stalwart_apppasswords extends rcube_plugin
     // ==================== JMAP API METHODS ====================
 
     /**
+     * Write debug logs for HTTP requests/responses when enabled.
+     */
+    private function log_http_debug($message, $context = array())
+    {
+        $debug_http = $this->rcmail->config->get('stalwart_apppasswords_debug_http', null);
+
+        if (!$debug_http) {
+            return;
+        }
+
+        $context_json = '';
+        if (!empty($context)) {
+            $context_json = json_encode($this->sanitize_log_data($context));
+            if ($context_json === false) {
+                $context_json = '';
+            }
+        }
+
+        rcube::write_log('stalwart_apppasswords', 'Stalwart App Passwords HTTP: ' . $message . ($context_json ? ' ' . $context_json : ''));
+    }
+
+    /**
+     * Redact sensitive fields before writing debug logs.
+     */
+    private function sanitize_log_data($value)
+    {
+        $sensitive_keys = array('authorization', 'token', 'access_token', 'secret', 'password');
+
+        if (is_array($value)) {
+            $sanitized = array();
+            foreach ($value as $key => $item) {
+                if (is_string($key) && in_array(strtolower($key), $sensitive_keys, true)) {
+                    $sanitized[$key] = '[redacted]';
+                } else {
+                    $sanitized[$key] = $this->sanitize_log_data($item);
+                }
+            }
+            return $sanitized;
+        }
+
+        if (is_string($value) && strlen($value) > 20000) {
+            return substr($value, 0, 20000) . '... [truncated]';
+        }
+
+        return $value;
+    }
+
+    /**
      * Get OAuth token from session.
      * Since Roundcube 1.7, the access_token is removed from $_SESSION['oauth_token']
      * and stored encrypted in $_SESSION['password'] as a "Bearer <token>" string.
@@ -746,6 +794,11 @@ class stalwart_apppasswords extends rcube_plugin
 
         $url = rtrim($base_url, '/') . '/jmap/session';
 
+        $this->log_http_debug('Requesting JMAP session', array(
+            'url' => $url,
+            'method' => 'GET',
+        ));
+
         $ch = curl_init($url);
         curl_setopt_array($ch, array(
             CURLOPT_RETURNTRANSFER => true,
@@ -758,7 +811,15 @@ class stalwart_apppasswords extends rcube_plugin
 
         $response = curl_exec($ch);
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        $curl_error = curl_error($ch);
         curl_close($ch);
+
+        $this->log_http_debug('JMAP session response received', array(
+            'url' => $url,
+            'http_code' => $http_code,
+            'curl_error' => $curl_error,
+            'response' => $response,
+        ));
 
         if ($http_code !== 200) {
             return null;
@@ -809,6 +870,13 @@ class stalwart_apppasswords extends rcube_plugin
 
         $url = rtrim($base_url, '/') . '/jmap';
 
+        $this->log_http_debug('Sending JMAP request', array(
+            'url' => $url,
+            'method' => 'POST',
+            'jmap_method' => $method,
+            'jmap_args' => $args,
+        ));
+
         $ch = curl_init($url);
         curl_setopt_array($ch, array(
             CURLOPT_RETURNTRANSFER => true,
@@ -826,6 +894,14 @@ class stalwart_apppasswords extends rcube_plugin
         $http_code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
         $curl_error = curl_error($ch);
         curl_close($ch);
+
+        $this->log_http_debug('JMAP response received', array(
+            'url' => $url,
+            'jmap_method' => $method,
+            'http_code' => $http_code,
+            'curl_error' => $curl_error,
+            'response' => $response,
+        ));
 
         if ($curl_error) {
             rcube::raise_error(array(
