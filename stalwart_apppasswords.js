@@ -35,7 +35,7 @@ if (window.rcmail) {
             if (!rcmail.apppasswords_list) return;
 
             var sel = rcmail.apppasswords_list.get_single_selection();
-            if (sel && confirm(rcmail.gettext('stalwart_apppasswords.confirm_delete'))) {
+            if (sel && confirm(rcmail.gettext('confirm_delete', 'stalwart_apppasswords'))) {
                 var id = sel.replace('rcmrow', '');
                 rcmail.http_post('plugin.stalwart_apppasswords-delete', {_id: id}, rcmail.set_busy(true, 'loading'));
             }
@@ -45,7 +45,7 @@ if (window.rcmail) {
 
         // Delete command (fallback template)
         rcmail.register_command('plugin.stalwart_apppasswords-delete-fallback', function(id) {
-            if (confirm(rcmail.gettext('stalwart_apppasswords.confirm_delete'))) {
+            if (confirm(rcmail.gettext('confirm_delete', 'stalwart_apppasswords'))) {
                 rcmail.http_post('plugin.stalwart_apppasswords-delete', {_id: id}, rcmail.set_busy(true, 'loading'));
             }
         }, true);

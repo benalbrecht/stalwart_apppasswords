@@ -20,6 +20,7 @@ class stalwart_apppasswords extends rcube_plugin
         $this->rcmail = rcmail::get_instance();
         $this->load_config();
         $this->add_texts('localization/');
+        $this->add_label('confirm_delete');
         $this->include_script('stalwart_apppasswords.js');
         $this->include_stylesheet($this->local_skin_path() . '/styles.css');  // Add this line
 
