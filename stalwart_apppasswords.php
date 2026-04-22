@@ -704,13 +704,26 @@ class stalwart_apppasswords extends rcube_plugin
     // ==================== JMAP API METHODS ====================
 
     /**
-     * Get OAuth token from session
+     * Get OAuth token from session.
+     * Since Roundcube 1.7, the access_token is removed from $_SESSION['oauth_token']
+     * and stored encrypted in $_SESSION['password'] as a "Bearer <token>" string.
      */
     private function get_oauth_token()
     {
+        // Roundcube 1.7+: access_token stored encrypted in $_SESSION['password']
+        if (isset($_SESSION['oauth_token']) && isset($_SESSION['password'])) {
+            $authorization = $this->rcmail->decrypt($_SESSION['password']);
+            if ($authorization && stripos($authorization, 'Bearer ') === 0) {
+                return substr($authorization, 7);
+            }
+            return $authorization ?: null;
+        }
+
+        // Roundcube 1.6 fallback
         if (isset($_SESSION['oauth_token']['access_token'])) {
             return $_SESSION['oauth_token']['access_token'];
         }
+
         return null;
     }
 
