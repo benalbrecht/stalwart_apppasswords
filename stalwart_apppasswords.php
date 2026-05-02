@@ -745,8 +745,21 @@ class stalwart_apppasswords extends rcube_plugin
             return $sanitized;
         }
 
-        if (is_string($value) && strlen($value) > 20000) {
-            return substr($value, 0, 20000) . '... [truncated]';
+        if (is_string($value)) {
+            $value_trimmed = trim($value);
+            if ($value_trimmed !== '' && ($value_trimmed[0] === '{' || $value_trimmed[0] === '[')) {
+                $decoded = json_decode($value_trimmed, true);
+                if (json_last_error() === JSON_ERROR_NONE && is_array($decoded)) {
+                    $sanitized_json = json_encode($this->sanitize_log_data($decoded));
+                    if ($sanitized_json !== false) {
+                        $value = $sanitized_json;
+                    }
+                }
+            }
+
+            if (strlen($value) > 20000) {
+                return substr($value, 0, 20000) . '... [truncated]';
+            }
         }
 
         return $value;
